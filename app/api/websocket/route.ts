@@ -81,8 +81,9 @@ export async function GET(request: NextRequest) {
 // 处理WebSocket消息的API端点
 export async function POST(request: NextRequest) {
   try {
-    const message: WebSocketMessage = await request.json();
-    const clientId = generateClientId();
+    const body = await request.json();
+    const message: WebSocketMessage = body;
+    const clientId = body.clientId || generateClientId();
     
     let response;
     

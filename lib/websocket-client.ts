@@ -64,10 +64,16 @@ export class WebSocketClient {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
 
       const result = await response.json();
+      
+      // 检查响应中的错误
+      if (result.type && result.type.includes('error')) {
+        throw new Error(result.message || '服务器返回错误');
+      }
       
       if (this.onMessage) {
         this.onMessage(result);
@@ -75,7 +81,8 @@ export class WebSocketClient {
       
       return result;
     } catch (error) {
-      const errorMessage = `发送消息失败: ${error}`;
+      const errorMessage = `发送消息失败: ${error instanceof Error ? error.message : error}`;
+      console.error('WebSocket发送错误:', error);
       if (this.onError) {
         this.onError(errorMessage);
       }

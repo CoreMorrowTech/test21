@@ -61,10 +61,35 @@ export class HardwareManager {
         baudRate: config.baudRate,
         dataBits: config.dataBits,
         stopBits: config.stopBits,
-        parity: config.parity
+        parity: config.parity,
+        autoOpen: false // 手动控制打开
       });
 
-      // 创建解析器
+      // 设置错误处理（在打开之前设置）
+      this.serialPort.on('error', (error) => {
+        console.error('串口错误:', error);
+        if (this.onError) {
+          this.onError(`串口错误: ${error.message}`, 'serial');
+        }
+      });
+
+      // 等待串口打开
+      await new Promise<void>((resolve, reject) => {
+        if (!this.serialPort) {
+          reject(new Error('串口初始化失败'));
+          return;
+        }
+
+        this.serialPort.open((error) => {
+          if (error) {
+            reject(new Error(`串口打开失败: ${error.message}`));
+          } else {
+            resolve();
+          }
+        });
+      });
+
+      // 串口成功打开后创建解析器
       this.serialParser = this.serialPort.pipe(new ReadlineParser({ delimiter: '\r\n' }));
 
       // 设置数据接收处理
@@ -74,33 +99,22 @@ export class HardwareManager {
         }
       });
 
-      // 设置错误处理
-      this.serialPort.on('error', (error) => {
-        if (this.onError) {
-          this.onError(`串口错误: ${error.message}`, 'serial');
-        }
-      });
-
-      // 等待串口打开
-      return new Promise((resolve, reject) => {
-        if (!this.serialPort) {
-          reject(new Error('串口初始化失败'));
-          return;
-        }
-
-        this.serialPort.on('open', () => {
-          resolve();
-        });
-
-        this.serialPort.on('error', (error) => {
-          reject(error);
-        });
-      });
     } catch (error) {
-      if (this.onError) {
-        this.onError(`串口连接失败: ${error}`, 'serial');
+      // 清理资源
+      if (this.serialPort) {
+        this.serialPort.removeAllListeners();
+        if (this.serialPort.isOpen) {
+          this.serialPort.close();
+        }
+        this.serialPort = null;
       }
-      throw error;
+      this.serialParser = null;
+      
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (this.onError) {
+        this.onError(`串口连接失败: ${errorMessage}`, 'serial');
+      }
+      throw new Error(`串口连接失败: ${errorMessage}`);
     }
   }
 
