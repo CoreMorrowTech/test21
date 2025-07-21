@@ -85,11 +85,18 @@ export const useAppStore = create<AppStore>()(
             break;
           case 'data-receive':
             if (message.data) {
+              // 确保data是字符串类型
+              const dataString = typeof message.data === 'string' 
+                ? message.data 
+                : typeof message.data === 'object' && message.data.data
+                  ? message.data.data
+                  : JSON.stringify(message.data);
+              
               currentState.addDataEntry({
                 direction: 'received',
-                data: message.data,
+                data: dataString,
                 format: currentState.dataFormat,
-                source: message.source
+                source: message.source || (message.data && message.data.source)
               });
             }
             break;

@@ -186,12 +186,15 @@ export class WebSocketClient {
         if (response.ok) {
           const result = await response.json();
           if (result.data && result.data.length > 0 && this.onMessage) {
-            // 发送最新的数据更新
-            const latestData = result.data[result.data.length - 1];
-            this.onMessage({
-              type: 'data-receive',
-              data: latestData,
-              timestamp: new Date()
+            // 处理所有新数据
+            result.data.forEach((dataItem: any) => {
+              this.onMessage({
+                type: 'data-receive',
+                data: dataItem.data || dataItem,
+                source: dataItem.source,
+                timestamp: dataItem.timestamp ? new Date(dataItem.timestamp) : new Date(),
+                direction: dataItem.direction || 'received'
+              });
             });
           }
         }
