@@ -24,7 +24,7 @@ export class WebSocketClient {
   connect() {
     // 开始轮询数据更新
     this.startPolling();
-    
+
     // 模拟连接成功
     if (this.onMessage) {
       this.onMessage({
@@ -40,7 +40,7 @@ export class WebSocketClient {
       clearInterval(this.pollInterval);
       this.pollInterval = undefined;
     }
-    
+
     if (this.onMessage) {
       this.onMessage({
         type: 'disconnection',
@@ -69,16 +69,16 @@ export class WebSocketClient {
       }
 
       const result = await response.json();
-      
+
       // 检查响应中的错误
       if (result.type && result.type.includes('error')) {
         throw new Error(result.message || '服务器返回错误');
       }
-      
+
       if (this.onMessage) {
         this.onMessage(result);
       }
-      
+
       return result;
     } catch (error) {
       const errorMessage = `发送消息失败: ${error instanceof Error ? error.message : error}`;
@@ -188,13 +188,15 @@ export class WebSocketClient {
           if (result.data && result.data.length > 0 && this.onMessage) {
             // 处理所有新数据
             result.data.forEach((dataItem: any) => {
-              this.onMessage({
-                type: 'data-receive',
-                data: dataItem.data || dataItem,
-                source: dataItem.source,
-                timestamp: dataItem.timestamp ? new Date(dataItem.timestamp) : new Date(),
-                direction: dataItem.direction || 'received'
-              });
+              if (this.onMessage) {
+                this.onMessage({
+                  type: 'data-receive',
+                  data: dataItem.data || dataItem,
+                  source: dataItem.source,
+                  timestamp: dataItem.timestamp ? new Date(dataItem.timestamp) : new Date(),
+                  direction: dataItem.direction || 'received'
+                });
+              }
             });
           }
         }
