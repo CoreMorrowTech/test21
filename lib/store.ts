@@ -93,6 +93,7 @@ export const useAppStore = create<AppStore>()(
                   : JSON.stringify(message.data);
               
               currentState.addDataEntry({
+                type: 'websocket',
                 direction: 'received',
                 data: dataString,
                 format: currentState.dataFormat,
@@ -171,6 +172,7 @@ export const useAppStore = create<AppStore>()(
       try {
         await websocketClient.sendSerialData(data);
         state.addDataEntry({
+          type: 'serial',
           direction: 'sent',
           data,
           format: state.dataFormat
@@ -229,6 +231,7 @@ export const useAppStore = create<AppStore>()(
       try {
         await websocketClient.sendUDPData(data, state.udpConfig);
         state.addDataEntry({
+          type: 'udp',
           direction: 'sent',
           data,
           format: state.dataFormat,
