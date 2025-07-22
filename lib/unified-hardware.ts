@@ -224,23 +224,41 @@ class WebSerialPort implements UnifiedSerialPort {
   }
 
   async listPorts(): Promise<SerialPortInfo[]> {
+    // 检查浏览器支持
     if (!('serial' in navigator)) {
+      console.warn('浏览器不支持Web Serial API');
       return [];
     }
 
     try {
+      // 请求用户选择端口
+      const port = await (navigator as any).serial.requestPort();
+      if (!port) {
+        console.warn('用户未选择串口设备');
+        return [];
+      }
+
+      // 获取已授权端口列表
       const ports = await (navigator as any).serial.getPorts();
-      return ports.map((port: any, index: number) => ({
-        path: `WebSerial-${index}`,
-        manufacturer: 'Web Serial',
-        serialNumber: undefined,
-        pnpId: undefined,
-        locationId: undefined,
-        productId: undefined,
-        vendorId: undefined
-      }));
+      
+      return ports.map((port: any) => {
+        // 尝试获取更多端口信息
+        const info = port.getInfo();
+        return {
+          path: port.path || port.id || 'unknown',
+          manufacturer: info.usbVendorId ? `Vendor ${info.usbVendorId}` : 'Unknown',
+          serialNumber: info.usbProductId ? `Product ${info.usbProductId}` : '',
+          pnpId: undefined,
+          locationId: undefined,
+          productId: info.usbProductId,
+          vendorId: info.usbVendorId
+        };
+      });
     } catch (error) {
-      console.warn('获取 Web Serial 端口失败:', error);
+      console.error('获取串口列表时出错:', error);
+      if (error instanceof DOMException && error.name === 'SecurityError') {
+        console.warn('需要用户授权才能访问串口设备');
+      }
       return [];
     }
   }
