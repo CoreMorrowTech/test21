@@ -1,8 +1,9 @@
 
 // 主进程文件
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Notification } = require('electron');
 const path = require('path');
-const url = require('url');
+const fs = require('fs');
+const os = require('os');
 const serve = require('electron-serve');
 const loadURL = serve({ directory: 'out' });
 
@@ -10,13 +11,16 @@ const loadURL = serve({ directory: 'out' });
 const isDev = process.env.NODE_ENV === 'development';
 const port = process.env.PORT || 3000;
 
+let mainWindow;
+
 function createWindow() {
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      nodeIntegration: false,
+      contextIsolation: true,
+      enableRemoteModule: false,
       preload: path.join(__dirname, 'preload.js')
     },
   });
@@ -31,6 +35,59 @@ function createWindow() {
     loadURL(mainWindow);
   }
 }
+
+// IPC 处理程序
+ipcMain.handle('save-file', async (event, { filename, content }) => {
+  try {
+    const result = await dialog.showSaveDialog(mainWindow, {
+      defaultPath: path.join(os.homedir(), 'Downloads', filename),
+      filters: [
+        { name: 'Text Files', extensions: ['txt'] },
+        { name: 'JSON Files', extensions: ['json'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    });
+
+    if (!result.canceled && result.filePath) {
+      fs.writeFileSync(result.filePath, content);
+      return { success: true };
+    } else {
+      return { success: false, error: 'User canceled' };
+    }
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('show-notification', async (event, { title, body }) => {
+  try {
+    const notification = new Notification({ title, body });
+    notification.show();
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('window-minimize', async () => {
+  if (mainWindow) {
+    mainWindow.minimize();
+  }
+});
+
+ipcMain.handle('window-close', async () => {
+  if (mainWindow) {
+    mainWindow.close();
+  }
+});
+
+ipcMain.handle('get-app-info', async () => {
+  return {
+    name: app.getName(),
+    version: app.getVersion(),
+    platform: process.platform
+  };
+});
 
 app.whenReady().then(() => {
   createWindow();

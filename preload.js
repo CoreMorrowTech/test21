@@ -1,25 +1,25 @@
-
-// preload.js
+// Electron preload script
 const { contextBridge, ipcRenderer } = require('electron');
-const { SerialPort } = require('serialport');
 
-// 暴露 SerialPort 功能给渲染进程
+// 在渲染进程中暴露Electron API
 contextBridge.exposeInMainWorld('electronAPI', {
-  // 获取可用的串口列表
-  getSerialPorts: async () => {
-    try {
-      return await SerialPort.list();
-    } catch (error) {
-      console.error('获取串口列表失败:', error);
-      return [];
-    }
-  },
-
-  // 其他可能需要的 API
-  send: (channel, data) => {
-    ipcRenderer.send(channel, data);
-  },
-  receive: (channel, func) => {
-    ipcRenderer.on(channel, (event, ...args) => func(...args));
-  }
+  isElectron: true,
+  platform: process.platform,
+  versions: process.versions,
+  
+  // 应用信息
+  getAppInfo: () => ipcRenderer.invoke('get-app-info'),
+  
+  // 文件操作
+  saveFile: (filename, content) => ipcRenderer.invoke('save-file', { filename, content }),
+  
+  // 通知
+  showNotification: (title, body) => ipcRenderer.invoke('show-notification', { title, body }),
+  
+  // 窗口控制
+  minimizeWindow: () => ipcRenderer.invoke('window-minimize'),
+  closeWindow: () => ipcRenderer.invoke('window-close')
 });
+
+// 确保window.process可用（用于环境检测）
+window.process = process;

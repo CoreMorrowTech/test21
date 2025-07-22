@@ -1,32 +1,65 @@
-// 环境检测工具
-export const isElectron = () => {
-  return typeof window !== 'undefined' && 
-         window.process && 
-         (window.process as any).type;
-};
+/**
+ * 环境检测和配置
+ * 统一处理不同运行环境的差异
+ */
 
-export const isBrowser = () => {
-  return typeof window !== 'undefined' && !isElectron();
-};
+export type RuntimeEnvironment = 'electron' | 'web' | 'server';
 
-export const isServer = () => {
-  return typeof window === 'undefined';
-};
-
-export const getEnvironment = () => {
-  if (isElectron()) return 'electron';
-  if (isBrowser()) return 'browser';
-  if (isServer()) return 'server';
-  return 'unknown';
-};
-
-// 获取基础URL
-export const getBaseUrl = () => {
-  if (isElectron()) {
-    return '';
+// 检测当前运行环境
+export function detectEnvironment(): RuntimeEnvironment {
+  // 服务端环境
+  if (typeof window === 'undefined') {
+    return 'server';
   }
-  if (typeof window !== 'undefined') {
-    return window.location.origin;
+  
+  // Electron 环境检测
+  if (typeof window !== 'undefined' && (window as any).require) {
+    return 'electron';
   }
-  return process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+  
+  // Web 浏览器环境
+  return 'web';
+}
+
+export const currentEnvironment = detectEnvironment();
+
+// 便捷的环境检测函数
+export const isElectron = () => currentEnvironment === 'electron';
+export const isWeb = () => currentEnvironment === 'web';
+export const isServer = () => currentEnvironment === 'server';
+
+// 环境特性检测
+export const features = {
+  // 串口支持
+  hasNodeSerial: isElectron() || isServer(),
+  hasWebSerial: isWeb() && typeof navigator !== 'undefined' && 'serial' in navigator,
+  
+  // UDP支持
+  hasNodeUDP: isElectron() || isServer(),
+  hasWebSocket: typeof WebSocket !== 'undefined',
+  
+  // 文件系统支持
+  hasFileSystem: isElectron() || isServer(),
+  hasFileDownload: isWeb(),
+  
+  // 通知支持
+  hasNativeNotification: isElectron(),
+  hasWebNotification: isWeb() && typeof Notification !== 'undefined',
+  
+  // 窗口控制
+  hasWindowControl: isElectron()
 };
+
+// 获取环境信息
+export function getEnvironmentInfo() {
+  return {
+    environment: currentEnvironment,
+    features,
+    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'N/A',
+    platform: typeof process !== 'undefined' ? process.platform : 'unknown',
+    nodeVersion: typeof process !== 'undefined' ? process.version : 'N/A'
+  };
+}
+
+// 日志环境信息
+console.log('🔍 环境检测结果:', getEnvironmentInfo());

@@ -4,14 +4,18 @@ import React, { useEffect, useState } from 'react';
 import SerialDebugger from '@/components/SerialDebugger';
 import UDPDebugger from '@/components/UDPDebugger';
 import DataViewer from '@/components/DataViewer';
+import EnvironmentInfo from '@/components/EnvironmentInfo';
+import PlatformInfo from '@/components/PlatformInfo';
 import { useAppStore, useUIState, useDataState, useWebSocketStatus } from '@/lib/store';
 import { ConnectionStatus } from '@/types';
+import { usePlatform } from '@/components/PlatformProvider';
 
 export default function Home() {
   const { currentTab, setCurrentTab } = useUIState();
   const { entries, clear: clearData, export: exportData } = useDataState();
   const isWebSocketConnected = useWebSocketStatus();
   const connectWebSocket = useAppStore(state => state.connectWebSocket);
+  const platform = usePlatform();
   
   // 连接状态管理
   const [serialStatus, setSerialStatus] = useState<ConnectionStatus>('disconnected');
@@ -45,8 +49,30 @@ export default function Home() {
   };
 
   // 导出数据处理
-  const handleExportData = () => {
-    console.log('导出数据');
+  const handleExportData = async () => {
+    try {
+      const exportData = {
+        timestamp: new Date().toISOString(),
+        platform: platform.platform,
+        totalEntries: entries.length,
+        entries: entries.map(entry => ({
+          timestamp: entry.timestamp,
+          type: entry.type,
+          direction: entry.direction,
+          data: entry.data,
+          source: entry.source
+        }))
+      };
+
+      const content = JSON.stringify(exportData, null, 2);
+      const filename = `debug-data-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
+      
+      await platform.actions.saveFile(filename, content);
+      platform.actions.showNotification('导出成功', `数据已保存为 ${filename}`);
+    } catch (error) {
+      console.error('导出数据失败:', error);
+      platform.actions.showNotification('导出失败', '无法保存数据文件');
+    }
   };
 
   // 获取连接状态指示器
@@ -77,7 +103,7 @@ export default function Home() {
               <div className="text-2xl">🔧</div>
               <div>
                 <h1 className="text-xl font-bold text-gray-900">串口UDP调试助手</h1>
-                <p className="text-xs text-gray-500">Web端通信调试工具</p>
+                <PlatformInfo platform={platform} />
               </div>
             </div>
 
@@ -221,6 +247,11 @@ export default function Home() {
               <div className="text-sm text-gray-600">当前模式</div>
             </div>
           </div>
+        </div>
+
+        {/* 环境信息面板 */}
+        <div className="mt-6">
+          <EnvironmentInfo />
         </div>
       </main>
 

@@ -1,305 +1,216 @@
-# Serial UDP Debugger 使用指南
+# 串口UDP调试助手 - 使用指南
 
-## 快速开始
+## 概述
 
-### 方式一：使用便捷脚本（推荐）
+这是一个基于 Next.js 的串口和UDP通信调试工具，支持在 **Web浏览器** 和 **Electron桌面应用** 两种环境中运行，使用同一套代码。
 
+## 🚀 快速开始
+
+### 安装依赖
 ```bash
-# 开发模式（同时启动 Next.js 和 Electron）
-npm run start:dev
+npm install
+```
 
-# 启动 Web 版本（浏览器访问）
+### 开发模式
+```bash
+# 同时启动 Next.js 开发服务器和 Electron
+npm run dev
+```
+
+### 构建和部署
+
+#### 构建所有版本
+```bash
+npm run build
+```
+
+#### 单独构建
+```bash
+# 构建 Web 版本
+npm run build:web
+
+# 构建 Electron 版本  
+npm run build:electron
+```
+
+#### 打包 Electron 应用
+```bash
+# 打包当前平台
+npm run pack
+
+# 打包特定平台
+npm run dist:win    # Windows
+npm run dist:mac    # macOS
+npm run dist:linux  # Linux
+```
+
+## 🌐 环境支持
+
+### Web 浏览器版本
+- **串口通信**: 使用 Web Serial API（需要 Chrome 89+ 或支持的浏览器）
+- **UDP通信**: 通过 WebSocket 代理实现
+- **文件保存**: 浏览器下载
+- **通知**: 浏览器通知 API
+
+**访问方式**:
+```bash
 npm run start:web
+# 访问 http://localhost:3000
+```
 
-# 启动 Electron 桌面版本
+### Electron 桌面版本
+- **串口通信**: 原生 Node.js serialport 模块
+- **UDP通信**: 原生 Node.js dgram 模块  
+- **文件保存**: 原生文件系统对话框
+- **通知**: 系统原生通知
+
+**启动方式**:
+```bash
 npm run start:electron
 ```
 
-### 方式二：使用构建脚本
+## 🔧 功能特性
 
-```bash
-# 构建 Web 版本
-node build.js web
+### 统一的用户界面
+- 响应式设计，支持桌面和移动端
+- 实时连接状态显示
+- 数据收发历史记录
+- 环境信息面板
 
-# 打包 Windows EXE 文件
-node build.js exe
+### 平台适配
+- 自动检测运行环境
+- 功能特性自适应
+- 统一的API接口
+- 无缝的用户体验
 
-# 构建 Docker 镜像
-node build.js docker
+### 串口调试
+- 串口列表自动扫描
+- 可配置波特率、数据位等参数
+- 实时数据收发
+- 十六进制/文本显示切换
 
-# 构建所有平台版本
-node build.js all
+### UDP调试  
+- UDP服务器/客户端模式
+- 广播和单播支持
+- 多端点通信
+- 数据包来源显示
+
+## 📁 项目结构
+
+```
+├── app/                    # Next.js App Router
+│   ├── layout.tsx         # 根布局，集成平台适配器
+│   ├── page.tsx           # 主页面，统一的用户界面
+│   └── globals.css        # 全局样式
+├── components/            # React 组件
+│   ├── PlatformProvider.tsx    # 平台适配器Provider
+│   ├── EnvironmentInfo.tsx     # 环境信息组件
+│   ├── SerialDebugger.tsx      # 串口调试组件
+│   ├── UDPDebugger.tsx         # UDP调试组件
+│   └── DataViewer.tsx          # 数据查看器
+├── lib/                   # 核心库
+│   ├── platform.ts        # 平台检测和适配
+│   ├── environment.ts     # 环境配置
+│   ├── hardware-manager.ts # 硬件管理器
+│   └── store.ts           # 状态管理
+├── main.js               # Electron 主进程
+├── preload.js            # Electron 预加载脚本
+├── build-config.js       # 统一构建配置
+└── next.config.js        # Next.js 配置
 ```
 
-### 方式三：使用启动脚本
+## 🛠️ 开发指南
+
+### 添加新功能
+1. 在 `lib/platform.ts` 中添加平台适配方法
+2. 在组件中使用 `usePlatform()` Hook 获取平台功能
+3. 根据平台特性实现不同的逻辑分支
+
+### 环境检测
+```typescript
+import { usePlatform } from '@/components/PlatformProvider';
+
+function MyComponent() {
+  const platform = usePlatform();
+  
+  if (platform.platform === 'electron') {
+    // Electron 特定逻辑
+  } else {
+    // Web 浏览器逻辑
+  }
+}
+```
+
+### 平台功能使用
+```typescript
+// 保存文件
+await platform.actions.saveFile('data.json', jsonData);
+
+// 显示通知
+platform.actions.showNotification('标题', '消息内容');
+
+// 窗口控制 (仅 Electron)
+if (platform.features.canControlWindow) {
+  platform.actions.minimizeWindow();
+}
+```
+
+## 🧪 测试
 
 ```bash
-# 开发模式
-node start.js dev
+# 运行单元测试
+npm test
 
-# Web 版本
-node start.js web
+# 监听模式
+npm run test:watch
 
-# Electron 版本
-node start.js electron
+# 构建测试
+npm run test:build
+```
 
-# 构建项目
-node start.js build exe
+## 📦 构建管理
+
+使用内置的构建管理器：
+
+```bash
+# 查看所有命令
+node build-config.js
 
 # 清理构建文件
-node start.js clean
-```
+node build-config.js clean
 
-## 详细使用说明
-
-### 开发环境
-
-#### 1. 安装依赖
-```bash
-npm install
-```
-
-#### 2. 启动开发模式
-```bash
-npm run dev
-# 或
-npm run start:dev
-# 或
-node start.js dev
-```
-
-这将同时启动：
-- Next.js 开发服务器（http://localhost:3000）
-- Electron 桌面应用
-
-### 生产部署
-
-#### Web 版本部署
-
-**方法一：直接部署**
-```bash
-npm run build:web
-npm start
-```
-
-**方法二：使用 PM2**
-```bash
-npm install -g pm2
-npm run build:web
-pm2 start npm --name "serial-debugger" -- start
-```
-
-**方法三：Docker 部署**
-```bash
-# 构建镜像
-docker build -t serial-udp-debugger .
-
-# 运行容器
-docker run -p 3000:3000 serial-udp-debugger
-
-# 或使用 docker-compose
-docker-compose up -d
-```
-
-#### 桌面应用打包
-
-**准备工作：**
-1. 在 `assets/` 目录添加图标文件：
-   - `icon.ico` (Windows, 256x256)
-   - `icon.icns` (macOS)
-   - `icon.png` (Linux, 512x512)
-
-**打包命令：**
-```bash
-# Windows 版本
-npm run dist:win
-
-# macOS 版本
-npm run dist:mac
-
-# Linux 版本
-npm run dist:linux
-
-# 所有平台
-npm run dist
-```
-
-**输出文件：**
-- Windows: `dist/Serial UDP Debugger Setup.exe`
-- macOS: `dist/Serial UDP Debugger.dmg`
-- Linux: `dist/Serial UDP Debugger.AppImage`
-
-## 功能对比
-
-### Electron 桌面版本
-✅ **优势：**
-- 完整的串口支持（所有波特率和配置）
-- 原生 UDP 通信
-- 文件系统完全访问
-- 离线使用
-- 系统集成（托盘、通知等）
-- 更好的性能
-
-❌ **限制：**
-- 需要安装
-- 占用更多系统资源
-- 更新需要重新安装
-
-### Web 浏览器版本
-✅ **优势：**
-- 无需安装，直接访问
-- 跨平台兼容
-- 自动更新
-- 轻量级
-- 易于分享和部署
-
-❌ **限制：**
-- 串口支持有限（需要 Web Serial API）
-- UDP 通过 WebSocket 模拟
-- 浏览器兼容性要求（Chrome 89+, Edge 89+）
-- 需要网络连接
-- 安全限制较多
-
-## 浏览器兼容性
-
-### Web Serial API 支持
-- ✅ Chrome 89+
-- ✅ Edge 89+
-- ❌ Firefox（不支持）
-- ❌ Safari（不支持）
-
-### 推荐浏览器
-- **最佳体验：** Chrome 或 Edge 最新版本
-- **基本功能：** 任何现代浏览器（UDP 功能通过 WebSocket）
-
-## 常用命令速查
-
-```bash
-# 开发
-npm run dev                    # 开发模式
-npm run start:dev             # 开发模式（便捷脚本）
-
-# 构建
-npm run build:web             # 构建 Web 版本
-npm run build:electron        # 构建 Electron 静态文件
-node build.js web             # 构建 Web 版本（脚本）
-node build.js exe             # 打包 EXE 文件
-
-# 启动
-npm start                     # 启动 Web 版本
-npm run start:web             # 启动 Web 版本（便捷脚本）
-npm run start:electron        # 启动 Electron 版本
-
-# 打包
-npm run dist:win              # 打包 Windows 版本
-npm run dist:mac              # 打包 macOS 版本
-npm run dist:linux            # 打包 Linux 版本
-npm run dist                  # 打包所有平台
-
-# 测试和清理
-npm test                      # 运行测试
-npm run test:build            # 测试构建
-npm run clean                 # 清理构建文件
-```
-
-## 故障排除
-
-### 常见问题
-
-**1. 串口连接失败**
-- Electron 版本：检查串口驱动和权限
-- Web 版本：确保使用支持的浏览器，并授权串口访问
-
-**2. UDP 连接问题**
-- 检查防火墙设置
-- 确认端口未被占用
-- Web 版本需要 WebSocket 服务器支持
-
-**3. 构建失败**
-```bash
-# 清理并重新安装
-npm run clean
-rm -rf node_modules package-lock.json
-npm install
-```
-
-**4. Electron 打包失败**
-- 确保图标文件存在
-- 检查 Node.js 版本兼容性
-- 清理缓存：`npm run clean`
-
-### 调试模式
-
-**开发调试：**
-```bash
-# 启用详细日志
-DEBUG=* npm run dev
-
-# Electron 开发者工具
-# 在应用中按 F12 或 Ctrl+Shift+I
-```
-
-**生产调试：**
-```bash
-# Web 版本日志
-NODE_ENV=development npm start
+# 完整构建流程
+node build-config.js all
 
 # 查看构建信息
-npm run build:web -- --debug
+node build-config.js info
 ```
 
-## 性能优化建议
+## 🔍 故障排除
 
-### Web 版本
-- 启用 gzip 压缩
-- 配置 CDN 加速
-- 使用缓存策略
-- 启用 HTTPS
+### Web Serial API 不可用
+- 确保使用支持的浏览器（Chrome 89+）
+- 需要 HTTPS 或 localhost 环境
+- 检查浏览器权限设置
 
-### Electron 版本
-- 减少打包体积（排除不必要的依赖）
-- 启用代码分割
-- 优化启动时间
-- 使用预加载脚本
+### Electron 串口模块加载失败
+- 确保安装了 `serialport` 依赖
+- 检查 Node.js 版本兼容性
+- 重新构建原生模块：`npm rebuild`
 
-## 更新和维护
+### UDP 功能异常
+- Web 环境需要 WebSocket 代理服务器
+- 检查防火墙和端口设置
+- 确认网络权限
 
-### 更新 Web 版本
-```bash
-git pull
-npm install
-npm run build:web
-pm2 restart serial-debugger  # 如果使用 PM2
-```
+## 📄 许可证
 
-### 更新 Electron 版本
-```bash
-git pull
-npm install
-npm run dist:win  # 重新打包
-```
+MIT License - 详见 LICENSE 文件
 
-### 依赖更新
-```bash
-# 检查过时的包
-npm outdated
+## 🤝 贡献
 
-# 更新依赖
-npm update
+欢迎提交 Issue 和 Pull Request！
 
-# 安全审计
-npm audit
-npm audit fix
-```
+---
 
-## 技术支持
-
-如果遇到问题，请按以下顺序排查：
-
-1. 检查 Node.js 版本（推荐 v18+）
-2. 清理并重新安装依赖
-3. 查看错误日志
-4. 检查系统权限设置
-5. 确认网络连接状态
-
-更多技术细节请参考 `DEPLOYMENT.md` 或提交 Issue。
+**提示**: 这个项目展示了如何使用 Next.js 创建跨平台应用，同时支持 Web 和 Electron 环境，是学习现代前端架构的好例子。
