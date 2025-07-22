@@ -3,6 +3,7 @@
  * 展示如何在 Web 和 Electron 环境中使用相同的代码
  */
 
+import React from 'react';
 import { unifiedHardware } from '@/lib/unified-hardware';
 import { SerialConfig, UDPConfig } from '@/types';
 

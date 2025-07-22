@@ -18,7 +18,30 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // 窗口控制
   minimizeWindow: () => ipcRenderer.invoke('window-minimize'),
-  closeWindow: () => ipcRenderer.invoke('window-close')
+  closeWindow: () => ipcRenderer.invoke('window-close'),
+  
+  // 串口操作
+  serial: {
+    listPorts: () => ipcRenderer.invoke('serial-list-ports'),
+    connect: (config) => ipcRenderer.invoke('serial-connect', config),
+    disconnect: () => ipcRenderer.invoke('serial-disconnect'),
+    send: (data) => ipcRenderer.invoke('serial-send', data),
+    getStatus: () => ipcRenderer.invoke('serial-status'),
+    
+    // 事件监听
+    onDataReceived: (callback) => {
+      ipcRenderer.on('serial-data-received', (event, data) => callback(data));
+    },
+    onError: (callback) => {
+      ipcRenderer.on('serial-error', (event, error) => callback(error));
+    },
+    
+    // 移除监听器
+    removeAllListeners: () => {
+      ipcRenderer.removeAllListeners('serial-data-received');
+      ipcRenderer.removeAllListeners('serial-error');
+    }
+  }
 });
 
 // 确保window.process可用（用于环境检测）

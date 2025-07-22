@@ -25,88 +25,73 @@ export interface UnifiedUDPSocket {
   isConnected(): boolean;
 }
 
-// Electron 环境的串口实现
+// Electron 环境的串口实现（通过 IPC）
 class ElectronSerialPort implements UnifiedSerialPort {
-  private port: any = null;
-  private parser: any = null;
+  private connected = false;
   private dataCallback?: (data: string) => void;
   private errorCallback?: (error: string) => void;
 
-  async connect(config: SerialConfig): Promise<void> {
-    try {
-      const { SerialPort } = require('serialport');
-      const { ReadlineParser } = require('@serialport/parser-readline');
-
-      this.port = new SerialPort({
-        path: config.port,
-        baudRate: config.baudRate,
-        dataBits: config.dataBits,
-        stopBits: config.stopBits,
-        parity: config.parity,
-        autoOpen: false
-      });
-
-      // 错误处理
-      this.port.on('error', (error: any) => {
-        if (this.errorCallback) {
-          this.errorCallback(`串口错误: ${error.message}`);
-        }
-      });
-
-      // 打开串口
-      await new Promise<void>((resolve, reject) => {
-        this.port.open((error: any) => {
-          if (error) {
-            reject(new Error(`串口打开失败: ${error.message}`));
-          } else {
-            resolve();
-          }
-        });
-      });
-
-      // 设置数据解析器
-      this.parser = this.port.pipe(new ReadlineParser({ delimiter: '\r\n' }));
-      this.parser.on('data', (data: string) => {
+  constructor() {
+    // 设置 IPC 事件监听器
+    if (typeof window !== 'undefined' && (window as any).electronAPI) {
+      const electronAPI = (window as any).electronAPI;
+      
+      // 监听数据接收
+      electronAPI.serial.onDataReceived((data: string) => {
         if (this.dataCallback) {
           this.dataCallback(data);
         }
       });
 
+      // 监听错误
+      electronAPI.serial.onError((error: string) => {
+        if (this.errorCallback) {
+          this.errorCallback(error);
+        }
+      });
+    }
+  }
+
+  async connect(config: SerialConfig): Promise<void> {
+    if (typeof window === 'undefined' || !(window as any).electronAPI) {
+      throw new Error('Electron API 不可用');
+    }
+
+    try {
+      const result = await (window as any).electronAPI.serial.connect(config);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      this.connected = true;
     } catch (error) {
       throw new Error(`Electron 串口连接失败: ${error}`);
     }
   }
 
   async disconnect(): Promise<void> {
-    if (this.port && this.port.isOpen) {
-      await new Promise<void>((resolve, reject) => {
-        this.port.close((error: any) => {
-          if (error) {
-            reject(error);
-          } else {
-            resolve();
-          }
-        });
-      });
+    if (typeof window === 'undefined' || !(window as any).electronAPI) {
+      return;
     }
-    this.port = null;
-    this.parser = null;
+
+    try {
+      const result = await (window as any).electronAPI.serial.disconnect();
+      if (!result.success) {
+        console.warn('串口断开警告:', result.error);
+      }
+    } finally {
+      this.connected = false;
+    }
   }
 
   async send(data: string): Promise<void> {
-    if (!this.port || !this.port.isOpen) {
-      throw new Error('串口未连接');
+    if (typeof window === 'undefined' || !(window as any).electronAPI) {
+      throw new Error('Electron API 不可用');
     }
 
-    await new Promise<void>((resolve, reject) => {
-      this.port.write(data + '\r\n', (error: any) => {
-        if (error) {
-          reject(error);
-        } else {
-          resolve();
-        }
-      });
-    });
+    const result = await (window as any).electronAPI.serial.send(data);
+    if (!result.success) {
+      throw new Error(result.error);
+    }
   }
 
   onData(callback: (data: string) => void): void {
@@ -118,22 +103,20 @@ class ElectronSerialPort implements UnifiedSerialPort {
   }
 
   isConnected(): boolean {
-    return this.port && this.port.isOpen;
+    return this.connected;
   }
 
   async listPorts(): Promise<SerialPortInfo[]> {
+    if (typeof window === 'undefined' || !(window as any).electronAPI) {
+      throw new Error('Electron API 不可用');
+    }
+
     try {
-      const { SerialPort } = require('serialport');
-      const ports = await SerialPort.list();
-      return ports.map((port: any) => ({
-        path: port.path,
-        manufacturer: port.manufacturer,
-        serialNumber: port.serialNumber,
-        pnpId: port.pnpId,
-        locationId: port.locationId,
-        productId: port.productId,
-        vendorId: port.vendorId
-      }));
+      const result = await (window as any).electronAPI.serial.listPorts();
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.ports;
     } catch (error) {
       throw new Error(`获取串口列表失败: ${error}`);
     }

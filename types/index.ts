@@ -28,6 +28,7 @@ export interface UDPConfig {
 export interface DataEntry {
   id: string;
   timestamp: Date;
+  type: 'serial' | 'udp' | 'websocket';
   direction: 'sent' | 'received';
   data: string;
   format: 'text' | 'hex';
