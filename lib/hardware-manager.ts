@@ -1,12 +1,27 @@
-import { SerialPort } from 'serialport';
-import { ReadlineParser } from '@serialport/parser-readline';
-import * as dgram from 'dgram';
 import { SerialConfig, UDPConfig, SerialPortInfo } from '@/types';
+import { isElectron } from './environment';
+
+// 动态导入，只在 Electron 环境下加载
+let SerialPort: any = null;
+let ReadlineParser: any = null;
+let dgram: any = null;
+
+if (isElectron()) {
+  try {
+    const serialport = require('serialport');
+    SerialPort = serialport.SerialPort;
+    ReadlineParser = require('@serialport/parser-readline').ReadlineParser;
+    dgram = require('dgram');
+  } catch (error) {
+    console.warn('串口模块加载失败，将使用模拟模式');
+  }
+}
 
 export class HardwareManager {
-  private serialPort: SerialPort | null = null;
-  private udpSocket: dgram.Socket | null = null;
-  private serialParser: ReadlineParser | null = null;
+  private serialPort: any = null;
+  private udpSocket: any = null;
+  private serialParser: any = null;
+  private webSocket: WebSocket | null = null;
   private onSerialData?: (data: string) => void;
   private onUDPData?: (data: string, source: string) => void;
   private onError?: (error: string, type: 'serial' | 'udp') => void;
@@ -26,9 +41,36 @@ export class HardwareManager {
 
   // 获取可用串口列表
   async getAvailableSerialPorts(): Promise<SerialPortInfo[]> {
+    if (!isElectron()) {
+      // 浏览器环境下返回模拟数据或通过 Web Serial API
+      if ('serial' in navigator) {
+        // 使用 Web Serial API (需要用户授权)
+        try {
+          const ports = await (navigator as any).serial.getPorts();
+          return ports.map((port: any, index: number) => ({
+            path: `WebSerial-${index}`,
+            manufacturer: 'Web Serial',
+            serialNumber: undefined,
+            pnpId: undefined,
+            locationId: undefined,
+            productId: undefined,
+            vendorId: undefined
+          }));
+        } catch (error) {
+          console.warn('Web Serial API 不可用');
+          return [];
+        }
+      }
+      return []; // 浏览器环境下无串口支持
+    }
+
+    if (!SerialPort) {
+      throw new Error('串口模块未加载');
+    }
+
     try {
       const ports = await SerialPort.list();
-      return ports.map(port => ({
+      return ports.map((port: any) => ({
         path: port.path,
         manufacturer: port.manufacturer,
         serialNumber: port.serialNumber,
@@ -47,12 +89,58 @@ export class HardwareManager {
 
   // 连接串口
   async connectSerial(config: SerialConfig): Promise<void> {
-    if (this.serialPort && this.serialPort.isOpen) {
+    if (this.serialPort && (this.serialPort.isOpen || this.serialPort.readable)) {
       await this.disconnectSerial();
     }
 
     if (!config.port) {
       throw new Error('请选择串口');
+    }
+
+    if (!isElectron()) {
+      // 浏览器环境下使用 Web Serial API 或模拟连接
+      if ('serial' in navigator) {
+        try {
+          const port = await (navigator as any).serial.requestPort();
+          await port.open({ 
+            baudRate: config.baudRate,
+            dataBits: config.dataBits,
+            stopBits: config.stopBits,
+            parity: config.parity === 'none' ? 'none' : config.parity
+          });
+          
+          this.serialPort = port;
+          
+          // 设置数据读取
+          const reader = port.readable.getReader();
+          const readLoop = async () => {
+            try {
+              while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                
+                const data = new TextDecoder().decode(value);
+                if (this.onSerialData) {
+                  this.onSerialData(data);
+                }
+              }
+            } catch (error) {
+              console.error('串口读取错误:', error);
+            }
+          };
+          readLoop();
+          
+          return;
+        } catch (error) {
+          throw new Error(`Web Serial 连接失败: ${error}`);
+        }
+      } else {
+        throw new Error('浏览器不支持串口连接，请使用 Electron 版本');
+      }
+    }
+
+    if (!SerialPort) {
+      throw new Error('串口模块未加载');
     }
 
     try {
@@ -66,7 +154,7 @@ export class HardwareManager {
       });
 
       // 设置错误处理（在打开之前设置）
-      this.serialPort.on('error', (error) => {
+      this.serialPort.on('error', (error: any) => {
         console.error('串口错误:', error);
         if (this.onError) {
           this.onError(`串口错误: ${error.message}`, 'serial');
@@ -80,7 +168,7 @@ export class HardwareManager {
           return;
         }
 
-        this.serialPort.open((error) => {
+        this.serialPort.open((error: any) => {
           if (error) {
             reject(new Error(`串口打开失败: ${error.message}`));
           } else {
@@ -102,7 +190,9 @@ export class HardwareManager {
     } catch (error) {
       // 清理资源
       if (this.serialPort) {
-        this.serialPort.removeAllListeners();
+        if (this.serialPort.removeAllListeners) {
+          this.serialPort.removeAllListeners();
+        }
         if (this.serialPort.isOpen) {
           this.serialPort.close();
         }
@@ -127,7 +217,7 @@ export class HardwareManager {
           return;
         }
 
-        this.serialPort.close((error) => {
+        this.serialPort.close((error: any) => {
           if (error) {
             if (this.onError) {
               this.onError(`串口断开失败: ${error.message}`, 'serial');
@@ -145,7 +235,24 @@ export class HardwareManager {
 
   // 发送串口数据
   async sendSerialData(data: string): Promise<void> {
-    if (!this.serialPort || !this.serialPort.isOpen) {
+    if (!this.serialPort) {
+      throw new Error('串口未连接');
+    }
+
+    if (!isElectron()) {
+      // 浏览器环境下使用 Web Serial API
+      if (this.serialPort.writable) {
+        const writer = this.serialPort.writable.getWriter();
+        const encoder = new TextEncoder();
+        await writer.write(encoder.encode(data + '\r\n'));
+        writer.releaseLock();
+        return;
+      } else {
+        throw new Error('串口不可写');
+      }
+    }
+
+    if (!this.serialPort.isOpen) {
       throw new Error('串口未连接');
     }
 
@@ -155,7 +262,7 @@ export class HardwareManager {
         return;
       }
 
-      this.serialPort.write(data + '\r\n', (error) => {
+      this.serialPort.write(data + '\r\n', (error: any) => {
         if (error) {
           if (this.onError) {
             this.onError(`发送串口数据失败: ${error.message}`, 'serial');
@@ -170,15 +277,55 @@ export class HardwareManager {
 
   // 连接UDP
   async connectUDP(config: UDPConfig): Promise<void> {
-    if (this.udpSocket) {
+    if (this.udpSocket || this.webSocket) {
       await this.disconnectUDP();
+    }
+
+    if (!isElectron()) {
+      // 浏览器环境下使用 WebSocket 模拟 UDP
+      try {
+        const wsUrl = `ws://localhost:${config.localPort}`;
+        this.webSocket = new WebSocket(wsUrl);
+        
+        this.webSocket.onopen = () => {
+          console.log('WebSocket UDP 连接已建立');
+        };
+        
+        this.webSocket.onmessage = (event) => {
+          if (this.onUDPData) {
+            this.onUDPData(event.data, 'WebSocket');
+          }
+        };
+        
+        this.webSocket.onerror = (error) => {
+          if (this.onError) {
+            this.onError(`WebSocket UDP 错误: ${error}`, 'udp');
+          }
+        };
+        
+        return new Promise((resolve, reject) => {
+          if (!this.webSocket) {
+            reject(new Error('WebSocket 初始化失败'));
+            return;
+          }
+          
+          this.webSocket.onopen = () => resolve();
+          this.webSocket.onerror = () => reject(new Error('WebSocket 连接失败'));
+        });
+      } catch (error) {
+        throw new Error(`浏览器环境下 UDP 连接失败: ${error}`);
+      }
+    }
+
+    if (!dgram) {
+      throw new Error('UDP 模块未加载');
     }
 
     try {
       this.udpSocket = dgram.createSocket('udp4');
 
       // 设置数据接收处理
-      this.udpSocket.on('message', (msg, rinfo) => {
+      this.udpSocket.on('message', (msg: any, rinfo: any) => {
         const data = msg.toString();
         const source = `${rinfo.address}:${rinfo.port}`;
         if (this.onUDPData) {
@@ -187,7 +334,7 @@ export class HardwareManager {
       });
 
       // 设置错误处理
-      this.udpSocket.on('error', (error) => {
+      this.udpSocket.on('error', (error: any) => {
         if (this.onError) {
           this.onError(`UDP错误: ${error.message}`, 'udp');
         }
@@ -204,7 +351,7 @@ export class HardwareManager {
           resolve();
         });
 
-        this.udpSocket.on('error', (error) => {
+        this.udpSocket.on('error', (error: any) => {
           if (this.onError) {
             this.onError(`UDP绑定失败: ${error.message}`, 'udp');
           }
@@ -221,6 +368,12 @@ export class HardwareManager {
 
   // 断开UDP连接
   async disconnectUDP(): Promise<void> {
+    if (this.webSocket) {
+      this.webSocket.close();
+      this.webSocket = null;
+      return;
+    }
+    
     if (this.udpSocket) {
       return new Promise((resolve) => {
         if (!this.udpSocket) {
@@ -238,6 +391,16 @@ export class HardwareManager {
 
   // 发送UDP数据
   async sendUDPData(data: string, config: UDPConfig): Promise<void> {
+    if (this.webSocket) {
+      // 浏览器环境下通过 WebSocket 发送
+      if (this.webSocket.readyState === WebSocket.OPEN) {
+        this.webSocket.send(data);
+        return;
+      } else {
+        throw new Error('WebSocket 连接未就绪');
+      }
+    }
+
     if (!this.udpSocket) {
       throw new Error('UDP未连接');
     }
@@ -249,7 +412,7 @@ export class HardwareManager {
       }
 
       const buffer = Buffer.from(data);
-      this.udpSocket.send(buffer, config.targetPort, config.targetHost, (error) => {
+      this.udpSocket.send(buffer, config.targetPort, config.targetHost, (error: any) => {
         if (error) {
           if (this.onError) {
             this.onError(`发送UDP数据失败: ${error.message}`, 'udp');
@@ -264,11 +427,14 @@ export class HardwareManager {
 
   // 获取连接状态
   getSerialStatus(): boolean {
+    if (!isElectron()) {
+      return this.serialPort && this.serialPort.readable;
+    }
     return this.serialPort ? this.serialPort.isOpen : false;
   }
 
   getUDPStatus(): boolean {
-    return this.udpSocket !== null;
+    return this.udpSocket !== null || this.webSocket !== null;
   }
 
   // 清理资源

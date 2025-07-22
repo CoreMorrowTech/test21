@@ -2,21 +2,39 @@
   "name": "serial-udp-debugger",
   "version": "0.1.0",
   "private": true,
+  "main": "main.js",
+  "author": "Your Name",
+  "description": "Serial and UDP Debugger Application",
   "scripts": {
-    "dev": "next dev",
+    "dev": "concurrently -k \"next dev\" \"electron .\"",
     "build": "next build",
+    "build:web": "next build",
+    "build:electron": "cross-env BUILD_MODE=electron next build",
     "start": "next start",
+    "start:dev": "node start.js dev",
+    "start:web": "node start.js web",
+    "start:electron": "node start.js electron",
     "lint": "next lint",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "test:build": "node test-build.js",
+    "electron": "electron .",
+    "electron-dev": "cross-env NODE_ENV=development electron .",
+    "pack": "npm run build:electron && electron-builder --dir",
+    "dist": "npm run build:electron && electron-builder",
+    "dist:win": "npm run build:electron && electron-builder --win",
+    "dist:mac": "npm run build:electron && electron-builder --mac",
+    "dist:linux": "npm run build:electron && electron-builder --linux",
+    "clean": "node start.js clean"
   },
   "dependencies": {
+    "electron-serve": "^1.2.0",
     "next": "14.2.5",
     "react": "^18",
     "react-dom": "^18",
-    "zustand": "^4.5.2",
     "serialport": "^12.0.0",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "zustand": "^4.5.2"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.6.3",
@@ -27,6 +45,10 @@
     "@types/react-dom": "^18",
     "@types/ws": "^8.5.10",
     "autoprefixer": "^10.4.19",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^29.4.6",
+    "electron-builder": "^24.13.3",
     "eslint": "^8",
     "eslint-config-next": "14.2.5",
     "jest": "^30.0.4",
@@ -35,5 +57,34 @@
     "tailwindcss": "^3.4.4",
     "ts-jest": "^29.4.0",
     "typescript": "^5"
+  },
+  "build": {
+    "appId": "com.yourcompany.serialudpdebugger",
+    "productName": "Serial UDP Debugger",
+    "files": [
+      "main.js",
+      "preload.js",
+      "out/**/*",
+      "node_modules/**/*"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ]
+    }
   }
 }

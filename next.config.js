@@ -11,7 +11,16 @@ const nextConfig = {
   },
   experimental: {
     serverComponentsExternalPackages: ['serialport']
-  }
+  },
+  // 根据环境变量决定是否导出静态文件
+  ...(process.env.BUILD_MODE === 'electron' && {
+    output: 'export',
+    distDir: 'out',
+    images: {
+      unoptimized: true,
+    },
+    trailingSlash: true
+  })
 }
 
 module.exports = nextConfig
