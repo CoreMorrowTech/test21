@@ -57,9 +57,9 @@ export default function Home() {
         totalEntries: entries.length,
         entries: entries.map(entry => ({
           timestamp: entry.timestamp,
-          type: entry.type,
           direction: entry.direction,
           data: entry.data,
+          format: entry.format,
           source: entry.source
         }))
       };
